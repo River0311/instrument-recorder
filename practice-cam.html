@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Practice Cam — Guitar Practice Recorder</title>
+<title>River's Recorder</title>
 <style>
   :root{
     --bg:#0b0e13;
@@ -32,21 +32,36 @@
 
   #startOverlay{
     position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
-    background:radial-gradient(circle at 50% 40%, #1a2130, #05070a); z-index:50;
+    background:rgba(4,5,7,0.94); z-index:50;
   }
   #startOverlay .card{
-    background:rgba(255,255,255,0.05); border:1px solid var(--panel-border);
-    border-radius:16px; padding:36px 40px; text-align:center; max-width:420px;
-    backdrop-filter: blur(6px);
+    background:#ffffff; border:1px solid rgba(0,0,0,0.06);
+    border-radius:18px; padding:36px 40px; text-align:center; max-width:380px;
+    box-shadow:0 24px 60px rgba(0,0,0,0.5);
   }
-  #startOverlay h1{ font-size:22px; margin:0 0 8px; }
-  #startOverlay p{ color:var(--text-dim); font-size:13px; line-height:1.5; margin:0 0 20px;}
+  #startOverlay h1{ font-size:24px; margin:0 0 6px; color:#1b2330; }
+  #startOverlay p{ color:#6b7280; font-size:13px; line-height:1.5; margin:0 0 22px; }
   .bigbtn{
     background:var(--accent); color:#04211c; font-weight:700; border:none;
     padding:12px 22px; border-radius:10px; font-size:15px; cursor:pointer;
   }
   .bigbtn:hover{ filter:brightness(1.08); }
   #camError{ color:var(--danger); font-size:12px; margin-top:12px; display:none; }
+
+  /* ---------- Accent color picker (opened from the top bar, inside the app) ---------- */
+  .swatchRow{ display:flex; gap:9px; justify-content:center; margin-top:8px; }
+  .swatch{
+    width:26px; height:26px; border-radius:50%; border:2px solid transparent;
+    cursor:pointer; padding:0; display:inline-block;
+  }
+  .swatch.selected{ border-color:var(--text); box-shadow:0 0 0 2px rgba(0,0,0,0.35) inset; }
+  .customSwatch{
+    position:relative; overflow:hidden;
+    background:conic-gradient(red,yellow,lime,cyan,blue,magenta,red);
+  }
+  .customSwatch input[type=color]{
+    position:absolute; inset:0; opacity:0; cursor:pointer; width:100%; height:100%; border:none; padding:0;
+  }
 
   /* ---------- Generic Panel ---------- */
   .panel{
@@ -66,12 +81,17 @@
     flex-shrink:0;
   }
   .panel .phead:active{ cursor:grabbing; }
-  .panel .phead .ptitle{ display:flex; align-items:center; gap:6px; }
+  .panel .phead .ptitle{
+    display:flex; align-items:center; gap:6px; min-width:0;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .panel .phead > div:last-child{ flex-shrink:0; display:flex; }
   .panel .phead button{
     background:none; border:none; color:var(--text-dim); cursor:pointer; font-size:13px;
     padding:2px 4px; border-radius:4px;
   }
   .panel .phead button:hover{ color:var(--text); background:rgba(255,255,255,0.08); }
+  .panel .phead button.active{ color:var(--accent); }
   .panel .pbody{ flex:1; overflow:auto; padding:10px 12px; font-size:14px; }
   .resize-handle{
     position:absolute; right:0; bottom:0; width:16px; height:16px; cursor:nwse-resize;
@@ -119,26 +139,69 @@
 
   /* ---------- Hand placement panel ---------- */
   #handPanel .pbody{ display:flex; flex-direction:column; align-items:center; gap:4px; }
+  .handRow{ display:flex; align-items:flex-start; justify-content:center; gap:14px; }
+  .handCurrent{ display:flex; flex-direction:column; align-items:center; gap:4px; }
   #handChordName{ font-size:16px; font-weight:800; }
   #handVariantRow{ display:flex; align-items:center; gap:8px; }
   #handVariantRow button{ font-size:14px; }
   #handVariantLabel{ font-size:11px; color:var(--text-dim); }
   #handEmpty{ font-size:12px; color:var(--text-dim); text-align:center; }
-
-  /* ---------- Small chip panels ---------- */
-  .chip-panel .pbody{ display:flex; align-items:center; justify-content:center; gap:10px; padding:8px; }
-  #recBigBtn{
-    width:52px; height:52px; border-radius:50%; border:2px solid var(--danger);
-    background:rgba(239,91,91,0.15); cursor:pointer; display:flex; align-items:center; justify-content:center;
-    font-size:22px; color:var(--danger); flex-shrink:0;
+  #handNextPreview{
+    display:flex; flex-direction:column; align-items:center; gap:2px;
+    padding-left:14px; border-left:1px dashed var(--panel-border);
+    opacity:0.4; transition:opacity 0.25s;
   }
-  #recBigBtn.recording{ background:var(--danger); color:#1a0505; }
-  #recTimeChip{ font-family:ui-monospace,monospace; font-size:15px; }
-  #recDot{ width:9px; height:9px; border-radius:50%; background:var(--danger); display:none; margin-right:5px; }
-  #recDot.show{ display:inline-block; animation:pulse 1s infinite; }
+  #handNextPreview[hidden]{ display:none !important; }
+  #handNextLabel{ font-size:10.5px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.04em; margin-bottom:2px; }
+
   @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:0.25;} }
 
-  #camPanel .pbody{ display:flex; flex-direction:column; gap:6px; }
+  /* ---------- Fixed bottom control bar (Photo Booth style: cam/mic, record, timer) ---------- */
+  #bottomBar{
+    position:fixed; left:0; right:0; bottom:0; z-index:40;
+    display:grid; grid-template-columns: 1fr auto 1fr; align-items:center;
+    gap:14px; padding:12px 20px; min-height:78px;
+    background:rgba(10,13,18,0.4); border-top:1px solid rgba(255,255,255,0.08);
+    backdrop-filter: blur(14px);
+  }
+  #bottomBar[hidden]{ display:none !important; }
+  /* While a "video + overlay" (tab capture) recording is running, hide app chrome that
+     isn't part of the practice overlay so it doesn't end up baked into the saved video. */
+  body.rec-overlay-active #utilBar,
+  body.rec-overlay-active #panelToggleBar{ display:none !important; }
+  body.rec-overlay-active .bb-devices{ visibility:hidden; }
+  .bb-devices{ display:flex; gap:10px; justify-self:start; flex-wrap:wrap; }
+  .bb-spacer{ justify-self:end; }
+  .deviceChip{
+    display:flex; align-items:center; gap:6px;
+    background:rgba(255,255,255,0.08); border:1px solid var(--panel-border);
+    border-radius:9px; padding:6px 10px; max-width:190px;
+  }
+  .deviceChip .dicon{ font-size:14px; flex-shrink:0; }
+  .deviceChip select{
+    background:transparent; border:none; color:var(--text); padding:0;
+    font-size:12px; max-width:150px;
+  }
+  .bb-record{ display:flex; flex-direction:column; align-items:center; gap:6px; justify-self:center; }
+  .modeBtn{
+    font-size:10.5px; padding:4px 9px; border-radius:7px;
+    background:rgba(255,255,255,0.07); border:1px solid var(--panel-border);
+    color:var(--text-dim); cursor:pointer;
+  }
+  .modeBtn:hover{ background:rgba(255,255,255,0.14); }
+  .modeBtn.active{ background:var(--accent); color:#04211c; border-color:var(--accent); font-weight:700; }
+  .modeBtn:disabled{ opacity:0.5; cursor:default; }
+  #recBigBtn{
+    width:60px; height:60px; border-radius:50%; border:none;
+    background:var(--danger); cursor:pointer; display:flex; align-items:center; justify-content:center;
+    font-size:24px; color:#1a0505; flex-shrink:0;
+    box-shadow:0 2px 12px rgba(239,91,91,0.55);
+  }
+  #recBigBtn:hover{ filter:brightness(1.06); }
+  #recBigBtn.recording{ background:#c93f3f; }
+  #recTimeChip{ font-family:ui-monospace,monospace; font-size:13px; color:var(--text-dim); }
+  #recDot{ width:9px; height:9px; border-radius:50%; background:var(--danger); display:none; margin-right:5px; }
+  #recDot.show{ display:inline-block; animation:pulse 1s infinite; }
 
   /* ---------- Chord diagram svg ---------- */
   svg.diagram{ display:block; }
@@ -159,12 +222,14 @@
   /* ---------- Top-level utility bar (not a movable panel) ---------- */
   #utilBar{
     position:absolute; top:14px; left:50%; transform:translateX(-50%); z-index:30;
-    display:flex; gap:8px;
+    display:flex; align-items:center; gap:8px;
   }
+  #utilBar[hidden]{ display:none !important; }
   #panelToggleBar{
-    position:absolute; bottom:14px; right:14px; z-index:30;
+    position:absolute; bottom:124px; right:14px; z-index:30;
     display:flex; gap:6px; flex-wrap:wrap; max-width:60vw; justify-content:flex-end;
   }
+  #panelToggleBar[hidden]{ display:none !important; }
 
   /* modal */
   .modalBg{ position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:100; display:flex; align-items:center; justify-content:center;}
@@ -187,8 +252,8 @@
 
   <div id="startOverlay">
     <div class="card">
-      <h1>🎸 Practice Cam</h1>
-      <p>Record yourself playing with lyrics, a chord wheel, hand-placement diagrams, tempo &amp; a metronome overlaid right on the video — no extra tabs needed. Everything is draggable, resizable and saved for next time.</p>
+      <h1>River's Recorder</h1>
+      <p>Chords, lyrics &amp; hand placement, right over your camera.</p>
       <button class="bigbtn" id="startBtn">Turn on camera</button>
       <div id="camError">Could not access camera/mic. Check permissions and try again.</div>
     </div>
@@ -197,6 +262,9 @@
   <div id="utilBar" hidden>
     <button class="mini" id="mirrorBtn" title="Flip preview horizontally">Flip</button>
     <button class="mini" id="resetLayoutBtn" title="Reset panel positions">Reset layout</button>
+    <button class="mini" id="accentBtn" title="Change accent color">🎨 Color</button>
+    <button class="modeBtn active" id="modePlainBtn" data-mode="plain" title="Save just the camera video">Video only</button>
+    <button class="modeBtn" id="modeOverlayBtn" data-mode="overlay" title="Save the camera video with the chords/lyrics/timer overlay baked in">Video + overlay</button>
   </div>
 
   <div id="panelToggleBar" hidden></div>
@@ -207,18 +275,27 @@
       <div class="ptitle">✋ Hand placement</div>
       <div>
         <button data-act="add" title="Add a custom hand placement">+</button>
+        <button data-act="preview" title="Preview the next chord's shape, dimmed until it's actually up">👁</button>
         <button data-act="opacity" title="Cycle opacity">◐</button>
       </div>
     </div>
     <div class="pbody">
-      <div id="handChordName">—</div>
-      <div id="handDiagramHolder"></div>
-      <div id="handVariantRow" hidden>
-        <button class="mini" id="handPrev">‹</button>
-        <span id="handVariantLabel"></span>
-        <button class="mini" id="handNext">›</button>
+      <div class="handRow">
+        <div class="handCurrent">
+          <div id="handChordName">—</div>
+          <div id="handDiagramHolder"></div>
+          <div id="handVariantRow" hidden>
+            <button class="mini" id="handPrev">‹</button>
+            <span id="handVariantLabel"></span>
+            <button class="mini" id="handNext">›</button>
+          </div>
+          <button class="mini danger" id="handDeleteBtn" hidden style="margin-top:6px;">Delete this variant</button>
+        </div>
+        <div id="handNextPreview" hidden>
+          <div id="handNextLabel" class="small"></div>
+          <div id="handNextDiagramHolder"></div>
+        </div>
       </div>
-      <button class="mini danger" id="handDeleteBtn" hidden style="margin-top:6px;">Delete this variant</button>
     </div>
     <div class="resize-handle"></div>
   </div>
@@ -227,42 +304,47 @@
   <div class="panel" id="wheelPanel">
     <div class="phead">
       <div class="ptitle">🎯 Chord loop</div>
-      <div><button data-act="opacity" title="Cycle opacity">◐</button></div>
+      <div>
+        <button data-act="edit" title="Customize the chords in this loop">✎</button>
+        <button data-act="opacity" title="Cycle opacity">◐</button>
+      </div>
     </div>
     <div class="pbody">
       <svg id="wheelSvg" width="180" height="180" viewBox="0 0 180 180"></svg>
       <div id="demoTag"></div>
-      <div id="wheelHint">click a slice, or edit the song for your real progression</div>
+      <div id="wheelHint">click a slice to jump, or ✎ to set your own loop</div>
+      <div class="row" style="margin-top:8px;">
+        <div>
+          <label class="small">Tempo (BPM)</label>
+          <input type="number" id="wheelBpm" min="30" max="240" value="100">
+        </div>
+        <div>
+          <label class="small">Beats / chord</label>
+          <input type="number" id="wheelBeatsPerChord" min="1" max="32" value="4">
+        </div>
+      </div>
+      <button class="mini accent" id="wheelPlayBtn" style="width:100%;">▶ Auto-advance</button>
     </div>
     <div class="resize-handle"></div>
   </div>
 
-  <!-- Record chip (small floating, per sketch) -->
-  <div class="panel chip-panel" id="recPanel">
-    <div class="phead">
-      <div class="ptitle">⏺ Record</div>
-      <div><button data-act="opacity" title="Cycle opacity">◐</button></div>
+  <!-- Fixed bottom control bar: cam/mic choosing, record button, recording time -->
+  <div id="bottomBar" hidden>
+    <div class="bb-devices">
+      <div class="deviceChip" title="Camera">
+        <span class="dicon">🎥</span>
+        <select id="camSelect"></select>
+      </div>
+      <div class="deviceChip" title="Microphone">
+        <span class="dicon">🎤</span>
+        <select id="micSelect"></select>
+      </div>
     </div>
-    <div class="pbody">
+    <div class="bb-record">
       <button id="recBigBtn" title="Start/stop recording">⏺</button>
       <div><span id="recDot"></span><span id="recTimeChip">00:00</span></div>
     </div>
-    <div class="resize-handle"></div>
-  </div>
-
-  <!-- Camera / mic chip (bottom-left in sketch) -->
-  <div class="panel" id="camPanel">
-    <div class="phead">
-      <div class="ptitle">🎥 Cam / Mic</div>
-      <div><button data-act="opacity" title="Cycle opacity">◐</button></div>
-    </div>
-    <div class="pbody">
-      <label class="small">Camera</label>
-      <select id="camSelect"></select>
-      <label class="small" style="margin-top:6px;">Microphone</label>
-      <select id="micSelect"></select>
-    </div>
-    <div class="resize-handle"></div>
+    <div class="bb-spacer"></div>
   </div>
 
   <!-- Lyrics & Chords panel (bottom-center in sketch) -->
@@ -302,15 +384,14 @@
           <label class="small">Beats / bar</label>
           <input type="number" id="beatsPerBar" min="1" max="12" value="4">
         </div>
-        <div>
-          <label class="small">Beats / chord (auto-advance)</label>
-          <input type="number" id="beatsPerChord" min="1" max="16" value="4">
-        </div>
       </div>
       <div class="row">
         <label class="small" style="display:flex;align-items:center;gap:6px;flex:1;">
-          <input type="checkbox" id="autoAdvance" style="width:auto;"> Auto-advance chords with beat
+          <input type="checkbox" id="metroSoundToggle" style="width:auto;" checked> Play click sound
         </label>
+      </div>
+      <div style="font-size:11px; color:var(--text-dim);">
+        This is the same clock the chord loop (🎯) auto-advances on — start either one and both stay in sync. Untick the sound if you just want it running silently.
       </div>
     </div>
     <div class="resize-handle"></div>
@@ -379,9 +460,73 @@ That [G]saved a [Em]wretch like [D]me [G]"></textarea>
   </div>
 </div>
 
+<!-- Customize chord loop modal -->
+<div class="modalBg" id="wheelModal" hidden>
+  <div class="modalCard">
+    <h2>Customize the chord loop</h2>
+    <label class="small">Chords in your loop, separated by commas or spaces — in the order you want them to cycle.</label>
+    <input type="text" id="wheelChordsInput" placeholder="e.g. C#, F, D, Em" style="margin-bottom:10px;">
+    <div style="font-size:11px;color:var(--text-dim);">
+      Leave this blank and save to go back to auto-building the loop from the chords used in your song lyrics (or the demo loop, if no song is loaded yet).
+    </div>
+    <div class="closeRow">
+      <button class="mini" id="wheelCancelBtn">Cancel</button>
+      <button class="mini accent" id="wheelSaveBtn">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Accent color picker -->
+<div class="modalBg" id="accentModal" hidden>
+  <div class="modalCard" style="width:min(320px,90vw);">
+    <h2>Accent color</h2>
+    <div class="swatchRow">
+      <button class="swatch" data-color="#5ee6c8" style="background:#5ee6c8" title="Teal"></button>
+      <button class="swatch" data-color="#f6c453" style="background:#f6c453" title="Amber"></button>
+      <button class="swatch" data-color="#ef7ba0" style="background:#ef7ba0" title="Rose"></button>
+      <button class="swatch" data-color="#7aa8f0" style="background:#7aa8f0" title="Blue"></button>
+      <button class="swatch" data-color="#b98ef0" style="background:#b98ef0" title="Violet"></button>
+      <label class="swatch customSwatch" title="Custom color">
+        <input type="color" id="accentCustomInput" value="#5ee6c8">
+      </label>
+    </div>
+    <div class="closeRow">
+      <button class="mini accent" id="accentCloseBtn">Done</button>
+    </div>
+  </div>
+</div>
+
 <script>
 (function(){
   "use strict";
+
+  /* ============================================================
+     ACCENT COLOR (landing screen picker)
+  ============================================================ */
+  function applyAccentColor(hex){
+    document.documentElement.style.setProperty("--accent", hex);
+    document.querySelectorAll(".swatch[data-color]").forEach(b=>{
+      b.classList.toggle("selected", b.dataset.color.toLowerCase() === hex.toLowerCase());
+    });
+  }
+  function initAccentColor(){
+    let hex = null;
+    try{ hex = localStorage.getItem("practicecam_accent"); }catch(e){}
+    hex = hex || "#5ee6c8";
+    applyAccentColor(hex);
+    document.getElementById("accentCustomInput").value = hex;
+    document.querySelectorAll(".swatch[data-color]").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        applyAccentColor(btn.dataset.color);
+        try{ localStorage.setItem("practicecam_accent", btn.dataset.color); }catch(e){}
+      });
+    });
+    document.getElementById("accentCustomInput").addEventListener("input", (e)=>{
+      applyAccentColor(e.target.value);
+      try{ localStorage.setItem("practicecam_accent", e.target.value); }catch(e){}
+    });
+  }
+  initAccentColor();
 
   /* ============================================================
      CHORD LIBRARY (guitar) — strings low E(6) to high e(1)
@@ -454,6 +599,22 @@ That [G]saved a [Em]wretch like [D]me [G]"></textarea>
   }
   function saveCustomShapes(){
     try{ localStorage.setItem("practicecam_customshapes", JSON.stringify(customShapes)); }catch(e){}
+  }
+
+  /* ---------- custom user-defined chord loop ---------- */
+  let customWheelChords = null; // null = auto-build from song lyrics (or demo)
+  function loadCustomWheelChords(){
+    try{
+      const raw = localStorage.getItem("practicecam_customwheel");
+      const parsed = raw ? JSON.parse(raw) : null;
+      customWheelChords = (parsed && parsed.length) ? parsed : null;
+    }catch(e){ customWheelChords = null; }
+  }
+  function saveCustomWheelChords(){
+    try{
+      if(customWheelChords && customWheelChords.length) localStorage.setItem("practicecam_customwheel", JSON.stringify(customWheelChords));
+      else localStorage.removeItem("practicecam_customwheel");
+    }catch(e){}
   }
   // combined variant list for a chord: built-in (if any) first, then custom ones
   function variantsFor(name){
@@ -636,10 +797,19 @@ That [G]saved a [Em]wretch like [D]me [G]"></textarea>
     });
   }
 
+  // Advances along whatever list the chord loop wheel is currently showing
+  // (a custom loop if one's set, else the chords in the loaded song, else the demo loop) —
+  // not tied to the actual song lyric sequence, so it works even with no song loaded.
   function advanceChord(){
-    if(isDemoMode || chordSequence.length === 0) return;
-    currentChordIdx = (currentChordIdx + 1) % chordSequence.length;
-    setActiveChord(chordSequence[currentChordIdx]);
+    const list = uniqueChordList();
+    if(list.length === 0) return;
+    const at = list.indexOf(activeChordName);
+    const next = list[(at === -1 ? 0 : at + 1) % list.length];
+    if(!isDemoMode){
+      const seqIdx = chordSequence.indexOf(next);
+      if(seqIdx > -1) currentChordIdx = seqIdx;
+    }
+    setActiveChord(next);
     highlightLyricChord();
   }
 
@@ -647,6 +817,7 @@ That [G]saved a [Em]wretch like [D]me [G]"></textarea>
      CHORD WHEEL (circle of repeating chords)
   ============================================================ */
   function uniqueChordList(){
+    if(customWheelChords && customWheelChords.length) return customWheelChords;
     if(isDemoMode) return DEMO_CHORDS;
     const seen = [];
     chordSequence.forEach(c=>{ if(!seen.includes(c)) seen.push(c); });
@@ -664,7 +835,8 @@ That [G]saved a [Em]wretch like [D]me [G]"></textarea>
     const n = list.length;
     const cx = 90, cy = 90, rOuter = 78, rInner = 30;
     const startAngle = -Math.PI/2;
-    document.getElementById("demoTag").textContent = isDemoMode ? "example — load your song below" : "";
+    const usingCustom = customWheelChords && customWheelChords.length;
+    document.getElementById("demoTag").textContent = usingCustom ? "custom loop" : (isDemoMode ? "example — load your song below" : "");
 
     list.forEach((name, i) => {
       const a0 = startAngle + i*(2*Math.PI/n);
@@ -709,6 +881,11 @@ That [G]saved a [Em]wretch like [D]me [G]"></textarea>
     });
   }
 
+  // How many beats of the shared clock (below) each chord holds for. The clock itself
+  // is the same one the metronome uses, so the loop can never drift out of sync with it —
+  // starting either the metronome or the chord loop starts the one shared beat clock.
+  let chordLoopBeatsPerChord = 4;
+
   /* ============================================================
      HAND PLACEMENT PANEL
   ============================================================ */
@@ -723,16 +900,37 @@ That [G]saved a [Em]wretch like [D]me [G]"></textarea>
       holder.appendChild(renderChordSVG(null));
       row.hidden = true;
       delBtn.hidden = true;
-      return;
+    } else {
+      let idx = variantIndexByChord[activeChordName] || 0;
+      if(idx >= variants.length) idx = 0;
+      variantIndexByChord[activeChordName] = idx;
+      holder.appendChild(renderChordSVG(variants[idx]));
+      row.hidden = variants.length <= 1;
+      document.getElementById("handVariantLabel").textContent =
+        `${idx+1}/${variants.length}${variants[idx].source==="builtin" ? " (default)" : " (yours)"}`;
+      delBtn.hidden = variants[idx].source === "builtin";
     }
-    let idx = variantIndexByChord[activeChordName] || 0;
-    if(idx >= variants.length) idx = 0;
-    variantIndexByChord[activeChordName] = idx;
-    holder.appendChild(renderChordSVG(variants[idx]));
-    row.hidden = variants.length <= 1;
-    document.getElementById("handVariantLabel").textContent =
-      `${idx+1}/${variants.length}${variants[idx].source==="builtin" ? " (default)" : " (yours)"}`;
-    delBtn.hidden = variants[idx].source === "builtin";
+    renderNextChordPreview();
+  }
+
+  // "Foresee" toggle: shows the shape for whatever chord comes next in the loop,
+  // dimmed, so a player can start moving toward it before it's actually live.
+  let previewNextEnabled = localStorage.getItem("practicecam_previewnext") === "1";
+
+  function renderNextChordPreview(){
+    const wrap = document.getElementById("handNextPreview");
+    if(!previewNextEnabled){ wrap.hidden = true; return; }
+    const list = uniqueChordList();
+    const at = list.indexOf(activeChordName);
+    const next = list.length > 1 ? list[(at === -1 ? 0 : at + 1) % list.length] : null;
+    if(!next || next === activeChordName){ wrap.hidden = true; return; }
+    wrap.hidden = false;
+    document.getElementById("handNextLabel").textContent = `Next: ${next}`;
+    const nextHolder = document.getElementById("handNextDiagramHolder");
+    nextHolder.innerHTML = "";
+    const variants = variantsFor(next);
+    const idx = variants.length ? Math.min(variantIndexByChord[next] || 0, variants.length - 1) : 0;
+    nextHolder.appendChild(renderChordSVG(variants.length ? variants[idx] : null));
   }
 
   document.getElementById("handPrev").addEventListener("click", ()=>{
@@ -793,6 +991,14 @@ That [G]saved a [Em]wretch like [D]me [G]"></textarea>
     buildFretInputs(null);
     handModal.hidden = false;
   });
+  const handPreviewBtn = document.querySelector("#handPanel [data-act='preview']");
+  handPreviewBtn.classList.toggle("active", previewNextEnabled);
+  handPreviewBtn.addEventListener("click", ()=>{
+    previewNextEnabled = !previewNextEnabled;
+    try{ localStorage.setItem("practicecam_previewnext", previewNextEnabled ? "1" : "0"); }catch(e){}
+    handPreviewBtn.classList.toggle("active", previewNextEnabled);
+    renderNextChordPreview();
+  });
   document.getElementById("handCancelBtn").addEventListener("click", ()=> handModal.hidden = true);
   document.getElementById("handSaveBtn").addEventListener("click", ()=>{
     const name = normalizeChordName(document.getElementById("handChordInput").value);
@@ -816,16 +1022,14 @@ That [G]saved a [Em]wretch like [D]me [G]"></textarea>
   /* ============================================================
      PANEL DRAG / RESIZE / OPACITY / PERSISTENCE
   ============================================================ */
-  const PANEL_IDS = ["handPanel","wheelPanel","recPanel","camPanel","lyricsPanel","metroPanel","timerPanel"];
+  const PANEL_IDS = ["handPanel","wheelPanel","lyricsPanel","metroPanel","timerPanel"];
 
   function defaultLayout(){
     const W = window.innerWidth || 1280, H = window.innerHeight || 720;
     return {
-      handPanel:  { left: 24,          top: 70,        width: 210, height: 260, opacity: 0.85, visible:true },
-      wheelPanel: { left: W-260,       top: 70,        width: 236, height: 250, opacity: 0.85, visible:true },
-      recPanel:   { left: 24,          top: 350,       width: 190, height: 100, opacity: 0.85, visible:true },
-      camPanel:   { left: 24,          top: H-180,     width: 220, height: 150, opacity: 0.85, visible:true },
-      lyricsPanel:{ left: (W-520)/2,   top: H-230,     width: 520, height: 180, opacity: 0.85, visible:true },
+      handPanel:  { left: 24,          top: 70,        width: 340, height: 270, opacity: 0.85, visible:true },
+      wheelPanel: { left: W-260,       top: 70,        width: 236, height: 380, opacity: 0.85, visible:true },
+      lyricsPanel:{ left: (W-520)/2,   top: H-270,     width: 520, height: 180, opacity: 0.85, visible:true },
       metroPanel: { left: W-280,       top: 340,       width: 250, height: 300, opacity: 0.85, visible:false },
       timerPanel: { left: W-280,       top: 660,       width: 250, height: 300, opacity: 0.85, visible:false },
     };
@@ -947,7 +1151,7 @@ That [G]saved a [Em]wretch like [D]me [G]"></textarea>
   function buildToggleBar(){
     const bar = document.getElementById("panelToggleBar");
     bar.innerHTML = "";
-    const labels = { handPanel:"Hand placement", wheelPanel:"Chord loop", recPanel:"Record", camPanel:"Cam/Mic", lyricsPanel:"Lyrics", metroPanel:"Metronome", timerPanel:"Timer" };
+    const labels = { handPanel:"Hand placement", wheelPanel:"Chord loop", lyricsPanel:"Lyrics", metroPanel:"Metronome", timerPanel:"Timer" };
     PANEL_IDS.forEach(id=>{
       const b = document.createElement("button");
       b.className = "mini" + (layout[id].visible ? " accent" : "");
@@ -966,17 +1170,29 @@ That [G]saved a [Em]wretch like [D]me [G]"></textarea>
      METRONOME (Web Audio scheduler)
   ============================================================ */
   let audioCtx = null;
-  let metroRunning = false;
+  // One shared clock drives both the audible metronome AND the chord-loop auto-advance,
+  // so they can never drift out of sync — starting either one starts this same clock.
+  // Whether the click actually makes sound is a separate, independent toggle.
+  let clockRunning = false;
   let bpm = 100;
   let beatsPerBar = 4;
   let beatCount = 0;
+  let beatsSinceChordAdvance = 0;
   let nextNoteTime = 0;
   let schedulerTimer = null;
-  let beatsSinceChordAdvance = 0;
+  let metronomeSoundOn = localStorage.getItem("practicecam_metrosound") !== "0";
 
   function ensureAudio(){
     if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     return audioCtx;
+  }
+
+  // Keeps every BPM control (metronome slider + readout, chord-loop tempo field) in sync,
+  // since they all share the one `bpm` value.
+  function syncBpmDisplays(){
+    document.getElementById("bpmSlider").value = bpm;
+    document.getElementById("bpmVal").textContent = bpm;
+    document.getElementById("wheelBpm").value = bpm;
   }
 
   function scheduleClick(time, accent){
@@ -991,17 +1207,14 @@ That [G]saved a [Em]wretch like [D]me [G]"></textarea>
     osc.start(time); osc.stop(time+0.06);
   }
 
-  function flashBeat(accent){
+  function flashBeat(){
     const dot = document.getElementById("beatDot");
     dot.classList.add("on");
     setTimeout(()=>dot.classList.remove("on"), 90);
-    if(document.getElementById("autoAdvance").checked){
-      beatsSinceChordAdvance++;
-      const need = parseInt(document.getElementById("beatsPerChord").value,10) || 4;
-      if(beatsSinceChordAdvance >= need){
-        beatsSinceChordAdvance = 0;
-        advanceChord();
-      }
+    beatsSinceChordAdvance++;
+    if(beatsSinceChordAdvance >= chordLoopBeatsPerChord){
+      beatsSinceChordAdvance = 0;
+      advanceChord();
     }
   }
 
@@ -1009,27 +1222,30 @@ That [G]saved a [Em]wretch like [D]me [G]"></textarea>
     const ctx = ensureAudio();
     while(nextNoteTime < ctx.currentTime + 0.1){
       const accent = (beatCount % beatsPerBar === 0);
-      scheduleClick(nextNoteTime, accent);
+      if(metronomeSoundOn) scheduleClick(nextNoteTime, accent);
       const delay = (nextNoteTime - ctx.currentTime) * 1000;
-      setTimeout(()=>flashBeat(accent), Math.max(0,delay));
+      setTimeout(flashBeat, Math.max(0,delay));
       nextNoteTime += 60.0/bpm;
       beatCount++;
     }
   }
 
-  function startMetronome(){
-    if(metroRunning) return;
-    metroRunning = true;
+  function startClock(){
+    if(clockRunning) return;
+    clockRunning = true;
     beatCount = 0; beatsSinceChordAdvance = 0;
     const ctx = ensureAudio();
+    if(ctx.state === "suspended") ctx.resume(); // browsers can start contexts suspended until a user gesture resumes them
     nextNoteTime = ctx.currentTime + 0.05;
     schedulerTimer = setInterval(schedulerTick, 25);
     document.getElementById("metroToggle").textContent = "⏸ Stop";
+    document.getElementById("wheelPlayBtn").textContent = "⏸ Pause";
   }
-  function stopMetronome(){
-    metroRunning = false;
+  function stopClock(){
+    clockRunning = false;
     clearInterval(schedulerTimer);
     document.getElementById("metroToggle").textContent = "▶ Start";
+    document.getElementById("wheelPlayBtn").textContent = "▶ Auto-advance";
   }
 
   let tapTimes = [];
@@ -1043,8 +1259,7 @@ That [G]saved a [Em]wretch like [D]me [G]"></textarea>
       const avg = intervals.reduce((a,b)=>a+b,0)/intervals.length;
       bpm = Math.round(60000/avg);
       bpm = Math.max(30, Math.min(240, bpm));
-      document.getElementById("bpmSlider").value = bpm;
-      document.getElementById("bpmVal").textContent = bpm;
+      syncBpmDisplays();
     }
   }
 
@@ -1129,6 +1344,9 @@ That [G]saved a [Em]wretch like [D]me [G]"></textarea>
   let recStartTime = 0;
   let recTimerInterval = null;
   let audioDevices = [];
+  let displayStream = null; // used only for "video + overlay" (tab capture) recordings
+  let recordMode = localStorage.getItem("practicecam_recordmode") === "overlay" ? "overlay" : "plain";
+  const overlaySupported = !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia);
 
   async function listDevices(){
     try{
@@ -1172,6 +1390,7 @@ That [G]saved a [Em]wretch like [D]me [G]"></textarea>
       document.getElementById("startOverlay").style.display = "none";
       document.getElementById("utilBar").hidden = false;
       document.getElementById("panelToggleBar").hidden = false;
+      document.getElementById("bottomBar").hidden = false;
     }catch(err){
       document.getElementById("camError").style.display = "block";
       console.error(err);
@@ -1201,57 +1420,145 @@ That [G]saved a [Em]wretch like [D]me [G]"></textarea>
     return "";
   }
 
-  function toggleRecording(){
+  function setRecordControlsDisabled(disabled){
+    document.getElementById("modePlainBtn").disabled = disabled;
+    document.getElementById("modeOverlayBtn").disabled = disabled || !overlaySupported;
+    document.getElementById("camSelect").disabled = disabled;
+    document.getElementById("micSelect").disabled = disabled;
+  }
+
+  function setRecordMode(mode){
+    if(mediaRecorder && mediaRecorder.state !== "inactive") return; // can't switch mid-recording
+    if(mode === "overlay" && !overlaySupported) return;
+    recordMode = mode;
+    try{ localStorage.setItem("practicecam_recordmode", mode); }catch(e){}
+    document.getElementById("modePlainBtn").classList.toggle("active", mode === "plain");
+    document.getElementById("modeOverlayBtn").classList.toggle("active", mode === "overlay");
+  }
+  document.getElementById("modePlainBtn").addEventListener("click", ()=> setRecordMode("plain"));
+  document.getElementById("modeOverlayBtn").addEventListener("click", ()=> setRecordMode("overlay"));
+  if(!overlaySupported){
+    document.getElementById("modeOverlayBtn").disabled = true;
+    document.getElementById("modeOverlayBtn").title = "Not supported in this browser";
+  }
+
+  function downloadRecording(){
+    const blob = new Blob(recordedChunks, {type: mediaRecorder.mimeType || "video/webm"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const ts = new Date().toISOString().replace(/[:.]/g,"-");
+    a.href = url;
+    a.download = `practice-${ts}${recordMode === "overlay" ? "-overlay" : ""}.webm`;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(url); }, 2000);
+  }
+
+  function finishRecordingCleanup(){
+    clearInterval(recTimerInterval);
+    document.getElementById("recDot").classList.remove("show");
+    document.getElementById("recBigBtn").classList.remove("recording");
+    document.getElementById("recBigBtn").textContent = "⏺";
+    document.body.classList.remove("rec-overlay-active");
+    if(displayStream){ displayStream.getTracks().forEach(t=>t.stop()); displayStream = null; }
+    setRecordControlsDisabled(false);
+  }
+
+  function beginRecording(streamForRecorder){
+    recordedChunks = [];
+    const mime = pickMimeType();
+    try{
+      mediaRecorder = mime ? new MediaRecorder(streamForRecorder, {mimeType:mime}) : new MediaRecorder(streamForRecorder);
+    }catch(e){ mediaRecorder = new MediaRecorder(streamForRecorder); }
+    mediaRecorder.ondataavailable = (e)=>{ if(e.data && e.data.size>0) recordedChunks.push(e.data); };
+    mediaRecorder.onstop = ()=>{ downloadRecording(); finishRecordingCleanup(); };
+    mediaRecorder.start();
+    recStartTime = performance.now();
+    setRecordControlsDisabled(true);
+    document.getElementById("recDot").classList.add("show");
+    document.getElementById("recBigBtn").classList.add("recording");
+    document.getElementById("recBigBtn").textContent = "⏹";
+    recTimerInterval = setInterval(()=>{
+      document.getElementById("recTimeChip").textContent = fmtRecTime(performance.now()-recStartTime);
+    }, 250);
+  }
+
+  async function toggleRecording(){
     if(!currentStream) return;
     if(!mediaRecorder || mediaRecorder.state === "inactive"){
-      recordedChunks = [];
-      const mime = pickMimeType();
-      try{
-        mediaRecorder = mime ? new MediaRecorder(currentStream, {mimeType:mime}) : new MediaRecorder(currentStream);
-      }catch(e){ mediaRecorder = new MediaRecorder(currentStream); }
-      mediaRecorder.ondataavailable = (e)=>{ if(e.data && e.data.size>0) recordedChunks.push(e.data); };
-      mediaRecorder.onstop = ()=>{
-        const blob = new Blob(recordedChunks, {type: mediaRecorder.mimeType || "video/webm"});
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        const ts = new Date().toISOString().replace(/[:.]/g,"-");
-        a.href = url;
-        a.download = `practice-${ts}.webm`;
-        document.body.appendChild(a);
-        a.click();
-        setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(url); }, 2000);
-      };
-      mediaRecorder.start();
-      recStartTime = performance.now();
-      document.getElementById("recDot").classList.add("show");
-      document.getElementById("recBigBtn").classList.add("recording");
-      document.getElementById("recBigBtn").textContent = "⏹";
-      recTimerInterval = setInterval(()=>{
-        document.getElementById("recTimeChip").textContent = fmtRecTime(performance.now()-recStartTime);
-      }, 250);
+      if(recordMode === "overlay"){
+        try{
+          displayStream = await navigator.mediaDevices.getDisplayMedia({ video:{ frameRate:30 }, audio:false });
+        }catch(err){
+          console.error(err); // user cancelled the share picker, or it's blocked — just abort quietly
+          return;
+        }
+        const videoTrack = displayStream.getVideoTracks()[0];
+        if(videoTrack) videoTrack.addEventListener("ended", ()=>{
+          if(mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
+        });
+        document.body.classList.add("rec-overlay-active");
+        const audioTracks = currentStream.getAudioTracks();
+        beginRecording(new MediaStream([...displayStream.getVideoTracks(), ...audioTracks]));
+      } else {
+        beginRecording(currentStream);
+      }
     } else {
       mediaRecorder.stop();
-      clearInterval(recTimerInterval);
-      document.getElementById("recDot").classList.remove("show");
-      document.getElementById("recBigBtn").classList.remove("recording");
-      document.getElementById("recBigBtn").textContent = "⏺";
     }
   }
   document.getElementById("recBigBtn").addEventListener("click", toggleRecording);
+  setRecordMode(recordMode);
 
   /* ============================================================
      WIRING: metronome / timer / editor controls
   ============================================================ */
   document.getElementById("bpmSlider").addEventListener("input", (e)=>{
     bpm = parseInt(e.target.value,10);
-    document.getElementById("bpmVal").textContent = bpm;
+    syncBpmDisplays();
   });
   document.getElementById("metroToggle").addEventListener("click", ()=>{
-    metroRunning ? stopMetronome() : startMetronome();
+    clockRunning ? stopClock() : startClock();
   });
   document.getElementById("tapBtn").addEventListener("click", handleTap);
   document.getElementById("beatsPerBar").addEventListener("change", (e)=>{
     beatsPerBar = Math.max(1, parseInt(e.target.value,10)||4);
+  });
+  const metroSoundToggle = document.getElementById("metroSoundToggle");
+  metroSoundToggle.checked = metronomeSoundOn;
+  metroSoundToggle.addEventListener("change", (e)=>{
+    metronomeSoundOn = e.target.checked;
+    try{ localStorage.setItem("practicecam_metrosound", metronomeSoundOn ? "1" : "0"); }catch(err){}
+  });
+
+  // chord loop: tempo and beats/chord share the metronome's clock; this play button
+  // starts/stops that same clock (see metroToggle above).
+  document.getElementById("wheelBpm").addEventListener("change", (e)=>{
+    bpm = Math.max(30, Math.min(240, parseInt(e.target.value,10)||100));
+    syncBpmDisplays();
+  });
+  document.getElementById("wheelBeatsPerChord").addEventListener("change", (e)=>{
+    chordLoopBeatsPerChord = Math.max(1, parseInt(e.target.value,10)||4);
+    beatsSinceChordAdvance = 0;
+  });
+  document.getElementById("wheelPlayBtn").addEventListener("click", ()=>{
+    clockRunning ? stopClock() : startClock();
+  });
+
+  // chord loop: customize its own chord list
+  const wheelModal = document.getElementById("wheelModal");
+  document.querySelector("#wheelPanel [data-act='edit']").addEventListener("click", ()=>{
+    document.getElementById("wheelChordsInput").value = customWheelChords ? customWheelChords.join(", ") : "";
+    wheelModal.hidden = false;
+  });
+  document.getElementById("wheelCancelBtn").addEventListener("click", ()=> wheelModal.hidden = true);
+  document.getElementById("wheelSaveBtn").addEventListener("click", ()=>{
+    const raw = document.getElementById("wheelChordsInput").value.trim();
+    customWheelChords = raw ? raw.split(/[,\s]+/).map(normalizeChordName).filter(Boolean) : null;
+    if(customWheelChords && !customWheelChords.length) customWheelChords = null;
+    saveCustomWheelChords();
+    setActiveChord(uniqueChordList()[0]);
+    wheelModal.hidden = true;
   });
 
   document.getElementById("swStartBtn").addEventListener("click", ()=>{
@@ -1261,6 +1568,11 @@ That [G]saved a [Em]wretch like [D]me [G]"></textarea>
   document.getElementById("cdStartBtn").addEventListener("click", cdStartFn);
 
   document.getElementById("resetLayoutBtn").addEventListener("click", resetLayout);
+
+  // accent color picker
+  const accentModal = document.getElementById("accentModal");
+  document.getElementById("accentBtn").addEventListener("click", ()=> accentModal.hidden = false);
+  document.getElementById("accentCloseBtn").addEventListener("click", ()=> accentModal.hidden = true);
 
   // song editor
   const editModal = document.getElementById("editModal");
@@ -1285,12 +1597,15 @@ That [G]saved a [Em]wretch like [D]me [G]"></textarea>
   ============================================================ */
   function init(){
     loadCustomShapes();
+    loadCustomWheelChords();
     initPanels();
     buildToggleBar();
+    syncBpmDisplays();
+    document.getElementById("wheelBeatsPerChord").value = chordLoopBeatsPerChord;
     const savedText = localStorage.getItem("practicecam_songtext") || "";
     songTitle = localStorage.getItem("practicecam_songtitle") || "";
     if(savedText){ parseSong(savedText); renderLyrics(); }
-    else { setActiveChord(DEMO_CHORDS[0]); renderLyrics(); }
+    else { setActiveChord(uniqueChordList()[0]); renderLyrics(); }
     document.getElementById("stopwatch").textContent = "00:00.0";
     document.getElementById("countdown").textContent = "01:00";
   }
