@@ -262,7 +262,7 @@
   <div id="utilBar" hidden>
     <button class="mini" id="mirrorBtn" title="Flip preview horizontally">Flip</button>
     <button class="mini" id="resetLayoutBtn" title="Reset panel positions">Reset layout</button>
-    <button class="mini" id="accentBtn" title="Change accent color">🎨 Color</button>
+    <button class="mini" id="accentBtn" title="Change accent color">🎨 Accent Color</button>
     <button class="modeBtn active" id="modePlainBtn" data-mode="plain" title="Save just the camera video">Video only</button>
     <button class="modeBtn" id="modeOverlayBtn" data-mode="overlay" title="Save the camera video with the chords/lyrics/timer overlay baked in">Video + overlay</button>
   </div>
@@ -800,7 +800,22 @@ That [G]saved a [Em]wretch like [D]me [G]"></textarea>
   // Advances along whatever list the chord loop wheel is currently showing
   // (a custom loop if one's set, else the chords in the loaded song, else the demo loop) —
   // not tied to the actual song lyric sequence, so it works even with no song loaded.
+  // True when a custom loop is set — the one case where the wheel deliberately
+  // ignores the song's actual chord order in favor of whatever the user typed.
+  function usingCustomWheel(){
+    return !!(customWheelChords && customWheelChords.length);
+  }
+
+  // Whenever a real song is loaded (and no custom loop overrides it), the song's actual
+  // chord sequence is the source of truth — not the deduped wheel order — so this follows
+  // your lyrics exactly, repeats and all, instead of assuming an even loop.
   function advanceChord(){
+    if(!usingCustomWheel() && !isDemoMode && chordSequence.length){
+      currentChordIdx = (currentChordIdx + 1) % chordSequence.length;
+      setActiveChord(chordSequence[currentChordIdx]);
+      highlightLyricChord();
+      return;
+    }
     const list = uniqueChordList();
     if(list.length === 0) return;
     const at = list.indexOf(activeChordName);
@@ -816,8 +831,10 @@ That [G]saved a [Em]wretch like [D]me [G]"></textarea>
   /* ============================================================
      CHORD WHEEL (circle of repeating chords)
   ============================================================ */
+  // The wheel's slices are always every unique chord used in the lyrics (deduped,
+  // in first-appearance order) — or the custom loop / demo chords when those apply.
   function uniqueChordList(){
-    if(customWheelChords && customWheelChords.length) return customWheelChords;
+    if(usingCustomWheel()) return customWheelChords;
     if(isDemoMode) return DEMO_CHORDS;
     const seen = [];
     chordSequence.forEach(c=>{ if(!seen.includes(c)) seen.push(c); });
@@ -920,9 +937,16 @@ That [G]saved a [Em]wretch like [D]me [G]"></textarea>
   function renderNextChordPreview(){
     const wrap = document.getElementById("handNextPreview");
     if(!previewNextEnabled){ wrap.hidden = true; return; }
-    const list = uniqueChordList();
-    const at = list.indexOf(activeChordName);
-    const next = list.length > 1 ? list[(at === -1 ? 0 : at + 1) % list.length] : null;
+    // Same rule as advanceChord(): follow the real lyric order when a song is loaded,
+    // so "next" here matches what you'll actually see coming up in the Lyrics panel.
+    let next = null;
+    if(!usingCustomWheel() && !isDemoMode && chordSequence.length > 1){
+      next = chordSequence[(currentChordIdx + 1) % chordSequence.length];
+    } else {
+      const list = uniqueChordList();
+      const at = list.indexOf(activeChordName);
+      next = list.length > 1 ? list[(at === -1 ? 0 : at + 1) % list.length] : null;
+    }
     if(!next || next === activeChordName){ wrap.hidden = true; return; }
     wrap.hidden = false;
     document.getElementById("handNextLabel").textContent = `Next: ${next}`;
