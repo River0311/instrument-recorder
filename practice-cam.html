@@ -165,11 +165,13 @@
     backdrop-filter: blur(14px);
   }
   #bottomBar[hidden]{ display:none !important; }
-  /* While a "video + overlay" (tab capture) recording is running, hide app chrome that
-     isn't part of the practice overlay so it doesn't end up baked into the saved video. */
+  /* While a "video + overlay" (tab capture) recording is running, hide every bit of app
+     chrome — record button, device pickers, top bar — so only the practice overlay
+     panels (chords/lyrics/hand placement/timer) show up in the saved video. Stopping the
+     recording is then done from the browser's own "Stop sharing" control, not this page. */
   body.rec-overlay-active #utilBar,
-  body.rec-overlay-active #panelToggleBar{ display:none !important; }
-  body.rec-overlay-active .bb-devices{ visibility:hidden; }
+  body.rec-overlay-active #panelToggleBar,
+  body.rec-overlay-active #bottomBar{ display:none !important; }
   .bb-devices{ display:flex; gap:10px; justify-self:start; flex-wrap:wrap; }
   .bb-spacer{ justify-self:end; }
   .deviceChip{
@@ -1396,10 +1398,22 @@ That [G]saved a [Em]wretch like [D]me [G]"></textarea>
     }catch(e){}
   }
 
+  // "ideal" here just means "give me the best you've got, up to this" — the browser still
+  // falls back gracefully on cameras that can't do 1080p/30fps, so this is always safe to ask for.
+  // Without these, picking a specific camera from the dropdown was requesting only
+  // {deviceId}, no resolution/framerate hints at all — which is why quality dropped the moment
+  // you chose a camera instead of using the auto-picked default.
+  function videoConstraintsFor(camId){
+    const base = { width:{ideal:1920}, height:{ideal:1080}, frameRate:{ideal:30, max:60} };
+    if(camId) base.deviceId = {exact:camId};
+    else base.facingMode = "user";
+    return base;
+  }
+
   async function startCamera(camId, micId){
     const constraints = {
       audio: micId ? {deviceId:{exact:micId}} : true,
-      video: camId ? { deviceId: {exact:camId} } : { facingMode:"user", width:{ideal:1280}, height:{ideal:720} }
+      video: videoConstraintsFor(camId)
     };
     if(currentStream){ currentStream.getTracks().forEach(t=>t.stop()); }
     const stream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -1491,8 +1505,12 @@ That [G]saved a [Em]wretch like [D]me [G]"></textarea>
   function beginRecording(streamForRecorder){
     recordedChunks = [];
     const mime = pickMimeType();
+    // A default bitrate is tuned for typical webcam-quality footage; ask for more so the
+    // encoder doesn't over-compress once the camera is actually delivering 1080p/30fps+.
+    const recOpts = { videoBitsPerSecond: 8_000_000, audioBitsPerSecond: 128_000 };
+    if(mime) recOpts.mimeType = mime;
     try{
-      mediaRecorder = mime ? new MediaRecorder(streamForRecorder, {mimeType:mime}) : new MediaRecorder(streamForRecorder);
+      mediaRecorder = new MediaRecorder(streamForRecorder, recOpts);
     }catch(e){ mediaRecorder = new MediaRecorder(streamForRecorder); }
     mediaRecorder.ondataavailable = (e)=>{ if(e.data && e.data.size>0) recordedChunks.push(e.data); };
     mediaRecorder.onstop = ()=>{ downloadRecording(); finishRecordingCleanup(); };
@@ -1512,7 +1530,13 @@ That [G]saved a [Em]wretch like [D]me [G]"></textarea>
     if(!mediaRecorder || mediaRecorder.state === "inactive"){
       if(recordMode === "overlay"){
         try{
-          displayStream = await navigator.mediaDevices.getDisplayMedia({ video:{ frameRate:30 }, audio:false });
+          displayStream = await navigator.mediaDevices.getDisplayMedia({
+            video:{ frameRate:30 }, audio:false,
+            // Chromium browsers can skip the "what do you want to share" picker entirely
+            // and just grab this tab when this is set; browsers that don't recognize it
+            // simply ignore it and fall back to their normal picker.
+            preferCurrentTab: true,
+          });
         }catch(err){
           console.error(err); // user cancelled the share picker, or it's blocked — just abort quietly
           return;
